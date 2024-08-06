@@ -1,0 +1,99 @@
+tb_percConcluídos = 
+// Variável que faz a junção das duas tabelas de inclusão.
+VAR combinedTable =
+UNION(
+    SELECTCOLUMNS(
+        inclusao_assinc,
+        "idCurso", inclusao_assinc[idCurso],
+        "grupoColab", inclusao_assinc[grupoColab],
+        "matriculaColab", inclusao_assinc[matriculaColab],
+        "situacao", MAXX(RELATEDTABLE(colab_IN), colab_IN[SITUACAO]),
+        "progresso", inclusao_assinc[Progresso],
+        "nomeCurso", MAXX(RELATEDTABLE(at_channels_view_assinc), at_channels_view_assinc[channelName]),
+        "checkMigracaoGrupos", inclusao_assinc[check_migração_de_grupos] // Coluna que verifica se a pessoa migrou de grupo.
+    ),
+    SELECTCOLUMNS(
+        inclusao_sinc,
+        "idCurso", inclusao_sinc[idCursoMaster],
+        "grupoColab", inclusao_sinc[grupoColab],
+        "matriculaColab", inclusao_sinc[matriculaColab],
+        "situacao", MAXX(RELATEDTABLE(colab_IN), colab_IN[SITUACAO]),
+        "progresso", inclusao_sinc[Progresso],
+        "nomeCurso", MAXX(RELATEDTABLE(at_channels_view_sinc), at_channels_view_sinc[masterCourseName]),
+        "checkMigracaoGrupos", inclusao_sinc[check_migração_de_grupos] // Coluna que verifica se a pessoa migrou de grupo.
+    )
+)
+
+VAR filterSituacao = 
+    FILTER(
+        combinedTable,
+        [situacao] IN {"EM PRODUÇÃO", "FÉRIAS", "TREINAMENTO"}
+    )
+
+RETURN
+// Sumarização das colunas que serão apresentadas na tabela final.
+SUMMARIZE(
+    filterSituacao,
+    [idCurso],
+    [grupoColab],
+    [nomeCurso],
+    "percConcluídos", 
+        VAR currentIDCurso = [idCurso] // armazena o ID do curso atual para essa linha.
+        VAR currentGrupoColab = [grupoColab] // armazena o grupo atual para essa linha.
+
+        VAR totalRows = 
+        CALCULATE(
+            COUNTX(
+                FILTER(
+                    filterSituacao,
+                    [idCurso] = currentIDCurso && // corresponde ao ID do curso atual.
+                    [grupoColab] = currentGrupoColab &&  // filtra as pessoas que estão em grupos com o atual curso atribuído.
+                    [checkMigracaoGrupos] = 0
+                ),
+                [matriculaColab]
+            ) 
+        )
+
+        VAR approved = 
+            CALCULATE(
+                COUNTX(
+                    FILTER(
+                        filterSituacao,
+                        [progresso] = "Concluído" && // filtra as linhas que estão com progresso "Concluído".
+                        [idCurso] = currentIDCurso && // corresponde ao ID do curso atual.
+                        [grupoColab] = currentGrupoColab && // corresponde nome do grupo atual.
+                        [checkMigracaoGrupos] = 0 // filtra as pessoas que estão em grupos com o atual curso atribuído.
+                    ),
+                    [matriculaColab]
+            )
+        )
+
+
+        VAR allMigrated = 
+        CALCULATE(
+            COUNTX(
+                FILTER(
+                    filterSituacao,
+                    [idCurso] = currentIDCurso && // corresponde ao ID do curso atual.
+                    [grupoColab] = currentGrupoColab && // corresponde nome do grupo atual.
+                    [checkMigracaoGrupos] = 1 // filtra as pessoas que estão em grupos com o atual curso atribuído.
+                ),
+                [matriculaColab]
+            ) 
+        )
+
+        VAR percConcluidos = 
+        SWITCH(
+            TRUE(),
+            totalRows = 0 && allMigrated > 0, 1,
+            approved > 0, DIVIDE(approved, totalRows, 0),
+            0
+        )
+
+        RETURN 
+        IF(
+            ISBLANK(percConcluidos),
+            0,
+            percConcluidos
+        )
+)

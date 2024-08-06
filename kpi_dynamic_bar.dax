@@ -1,0 +1,11 @@
+kpi_dynamic_bar = 
+
+VAR Percentage = [kpi_perc_treinados_assinc] * 100
+VAR BarLength = 18
+VAR FilledBlocks = ROUND(Percentage * BarLength / 100, 0)
+RETURN
+IF(
+    ISBLANK(Percentage),
+    REPT("░", BarLength), // Empty bar
+    REPT("█", FilledBlocks) & REPT("░", BarLength - FilledBlocks) // Gradient bar
+)

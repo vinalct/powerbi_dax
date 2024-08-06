@@ -1,0 +1,40 @@
+kpi_perc_treinados_assinc = 
+
+VAR users_em_producao = 
+    FILTER(
+        ALL(colab_IN),
+        colab_IN[SITUACAO] IN {"EM PRODUÇÃO", "FÉRIAS", "TREINAMENTO"}
+    )
+
+VAR count_concluidos = 
+    CALCULATE(
+        COUNTROWS(inclusao_assinc),
+        inclusao_assinc[Progresso] = "Concluído",
+        TREATAS(VALUES(inclusao_assinc[matriculaColab]), colab_IN[MATRICULA]), users_em_producao
+    )
+
+VAR count_pendentes = 
+    CALCULATE(
+        COUNTROWS(inclusao_assinc),
+        inclusao_assinc[Progresso] = "Pendente",
+        TREATAS(VALUES(inclusao_assinc[matriculaColab]), colab_IN[MATRICULA]), users_em_producao
+    )
+
+VAR percentage = 
+    DIVIDE(
+        count_concluidos,
+        count_pendentes + count_concluidos,
+        0
+    )
+
+VAR selected_course = 
+    COUNTROWS(VALUES(at_channels_view_assinc))
+
+RETURN
+    IF(
+        ISFILTERED(at_channels_view_assinc[channelName]) && HASONEVALUE(at_channels_view_assinc[channelName]),
+        percentage,
+        BLANK()
+    )
+
+    
